@@ -5,10 +5,11 @@ Created on Mon Jul 1 10:29:18 2019
 @author: Pierre
 """
 ##########################################################################
-# GSCCompetitorsML2
+# GSCCompetitorsML2  - Modifié le 26/11/2019
 # Auteur : Pierre Rouarch - Licence GPL 3
 # Machine Learning sur un univers de concurrence 2
-#Données enrichie via Scraping précédemment.
+#Données enrichies via Scraping précédemment. récupérées via le fichier dfQPPS7.csv allégé.
+# focus sur la précision du test au lieu du F1-Score global
 #####################################################################################
 
 ###################################################################
@@ -34,11 +35,7 @@ from sklearn.linear_model import ElasticNet
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-#pour les scores
-from sklearn.metrics import f1_score
-#from sklearn.metrics import matthews_corrcoef
-from sklearn.metrics import accuracy_score
-#ROC Curve
+
 print(os.getcwd())  #verif
 #mon répertoire sur ma machine - nécessaire quand on fait tourner le programme 
 #par morceaux dans Spyder.
@@ -52,15 +49,13 @@ print(os.getcwd())  #verif
 #  Machine Learning sur les données enrichies après scraping
 #############################################################
 
-#Lecture des données avec scraping ############
-dfQPPS6 = pd.read_json("dfQPPS6.json")
-dfQPPS6.info(verbose=True) # 12194 enregistrements.    
-dfQPPS6.reset_index(inplace=True, drop=True) 
-
-
+#Lecture des données suite  à scraping ############
+dfQPPS8 = pd.read_csv("dfQPPS7.csv")
+dfQPPS8.info(verbose=True) # 12194 enregistrements.    
+dfQPPS8.reset_index(inplace=True, drop=True) 
 
 #Variables explicatives
-X =  dfQPPS6[['isHttps', 'level', 
+X =  dfQPPS8[['isHttps', 'level', 
              'lenWebSite', 'lenTokensWebSite',  'lenTokensQueryInWebSiteFrequency',  'sumTFIDFWebSiteFrequency',            
              'lenPath', 'lenTokensPath',  'lenTokensQueryInPathFrequency' , 'sumTFIDFPathFrequency',  
               'lenTitle', 'lenTokensTitle', 'lenTokensQueryInTitleFrequency', 'sumTFIDFTitleFrequency',
@@ -78,7 +73,7 @@ X =  dfQPPS6[['isHttps', 'level',
               'elapsedTime', 'nbrInternalLinks', 'nbrExternalLinks' ]]  #variables explicatives
 
 X.info()
-y =  dfQPPS6['group']  #variable à expliquer,
+y =  dfQPPS8['group']
 
 #on va scaler
 scaler = StandardScaler()
@@ -88,7 +83,10 @@ scaler.fit(X)
 X_Scaled = pd.DataFrame(scaler.transform(X.values), columns=X.columns, index=X.index)
 X_Scaled.info()
 
-X_train, X_test, y_train, y_test = train_test_split(X_Scaled,y, random_state=0)
+#on choisit random_state = 42 en hommage à La grande question sur la vie, l'univers et le reste
+#dans "Le Guide du voyageur galactique"   par  Douglas Adams. Ceci afin d'avoir le même split
+#tout au long de notre étude.
+X_train, X_test, y_train, y_test = train_test_split(X_Scaled,y, random_state=42)
 
 
 
@@ -97,11 +95,10 @@ X_train, X_test, y_train, y_test = train_test_split(X_Scaled,y, random_state=0)
 ######################################################
 
 #pour KNN  recherche du nombre de voisins optimal
-nMax=10   #nombre max de voisins
+nMax=20   #nombre max de voisins
 myTrainScore =  np.zeros(shape=nMax)
 myTestScore = np.zeros(shape=nMax)
 myTrainTestScore = np.zeros(shape=nMax)
-myF1Score = np.zeros(shape=nMax)
 
 for n in range(1,nMax) :
     print("n_neighbors:"+str(n))
@@ -111,29 +108,25 @@ for n in range(1,nMax) :
     print("Training set score: {:.3f}".format(knn.score(X_train,y_train))) #
     myTestScore[n]=knn.score(X_test,y_test)
     print("Test set score: {:.4f}".format(knn.score(X_test,y_test))) #
-    y_pred=knn.predict(X_Scaled)
-    print("F1-Score  : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-    myF1Score[n] = f1_score(y, y_pred, average ='weighted')
-
 
     
-#Graphique train score vs test score vs F1-Score
+#Graphique train score vs test score 
 sns.set()  #paramètres esthétiques ressemble à ggplot par défaut.
 fig, ax = plt.subplots()  #un seul plot
 sns.lineplot(x=np.arange(1,nMax), y=myTrainScore[1:nMax])
 sns.lineplot(x=np.arange(1,nMax), y=myTestScore[1:nMax], color='red')
-sns.lineplot(x=np.arange(1,nMax), y=myF1Score[1:nMax], color='yellow')
-fig.suptitle("Le score F1 diminue avec le nombre de voisins.", fontsize=14, fontweight='bold')
-ax.set(xlabel='n neighbors', ylabel='Train (bleu) / Test (rouge) / F1 (jaune)',
-       title="il passe de "+"{0:.2f}".format(myF1Score[1])+" à "+"{0:.2f}".format(myF1Score[nMax-1]))
+
+fig.suptitle("Les scores diminuent avec le nombre de voisins.", fontsize=14, fontweight='bold')
+ax.set(xlabel='n neighbors', ylabel='Train (bleu) / Test (rouge) ',
+       title="")
 fig.text(.2,-.06,"Classification Knn - Univers de Concurrence - Position  dans 2 groupes \n vs variables construites + variables pages en fonction des n voisins", 
          fontsize=9)
 #plt.show()
 fig.savefig("QPPS6-KNN-Classifier-2goups.png", bbox_inches="tight", dpi=600)
 
-#on choist le meilleur F1 Score
+#on choist le meilleur test score
 #à vérifier toutefois en regardant la courbe.
-indices = np.where(myF1Score == np.amax(myF1Score))
+indices = np.where(myTestScore == np.amax(myTestScore))
 n_neighbor =  indices[0][0]
 n_neighbor
 knn = KNeighborsClassifier(n_neighbors=n_neighbor) 
@@ -141,9 +134,9 @@ knn.fit(X_train, y_train)
 print("N neighbor="+str(n_neighbor))
 print("Training set score: {:.3f}".format(knn.score(X_train,y_train))) #
 print("Test set score: {:.4f}".format(knn.score(X_test,y_test)))
-y_pred=knn.predict(X_Scaled) #
-print("F1-Score: {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#F1 Score retenu pour knn :  0.9212
+
+#Test Score retenu pour knn :  0.7553 avec 2 voisins 
+#légèrement meilleur que précédemment  avec moins de variables : 0,7368
 
 
 ###############################################################################
@@ -155,27 +148,21 @@ print("Regression Logistique myC="+str(myC))
 logreg = LogisticRegression(C=myC, solver='lbfgs', max_iter=1000).fit(X_train,y_train)
 print("Training set score: {:.3f}".format(logreg.score(X_train,y_train)))  
 print("Test set score: {:.3f}".format(logreg.score(X_test,y_test))) 
-y_pred=logreg.predict(X_Scaled)
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6295 est moins bon que pour knn 0.9212   
+#le test  score 0.700 est moins bon que pour knn 0.7553  
 
 myC=100
 print("Regression Logistique myC="+str(myC))
 logreg100 = LogisticRegression(C=myC, solver='lbfgs', max_iter=1000).fit(X_train,y_train)
 print("Training set score: {:.3f}".format(logreg100.score(X_train,y_train)))  
 print("Test set score: {:.3f}".format(logreg100.score(X_test,y_test)))  
-y_pred=logreg100.predict(X_Scaled)
-print("F-Score weighted : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6297 est moins bon que pour knn 0.9212 mais un peu mieux que logreg 0.6295  .
+#le test  score 0.700 est moins bon que pour knn 0.7553  .
 
 myC=0.01
 print("Regression Logistique myC="+str(myC))
 logreg001 = LogisticRegression(C=myC, solver='lbfgs',max_iter=1000).fit(X_train,y_train)
 print("Training set score: {:.3f}".format(logreg001.score(X_train,y_train)))  
 print("Test set score: {:.3f}".format(logreg001.score(X_test,y_test)))  
-y_pred=logreg001.predict(X_Scaled)
-print("F1-Score  : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6248 est moins bon que pour knn 0.9212  et logreg100  0.6297
+#le test  score 0.699  est moins bon que pour knn 0.7553  .et que pour C=1 ou C=100
 
 
 myC=1000
@@ -183,9 +170,7 @@ print("Regression Logistique myC="+str(myC))
 logreg1000 = LogisticRegression(C=myC, solver='lbfgs', max_iter=1000).fit(X_train,y_train)
 print("Training set score: {:.3f}".format(logreg1000.score(X_train,y_train)))  
 print("Test set score: {:.3f}".format(logreg1000.score(X_test,y_test)))  
-y_pred=logreg1000.predict(X_Scaled)
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6302 est moins bon que pour knn 0.9212  et meilleur que logreg100  0.6297 !!!!!!!!!!
+#pareil le test  score 0.700 est moins bon que pour knn 0.7553  .
 
 
 ############################################################
@@ -193,8 +178,7 @@ print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
 LinSVC = LinearSVC(max_iter=100000).fit(X_train,y_train)
 print("Training set score: {:.3f}".format(LinSVC.score(X_train,y_train)))  
 print("Test set score: {:.3f}".format(LinSVC.score(X_test,y_test))) 
-y_pred=LinSVC .predict(X_Scaled) 
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
+
 
 
 ############################################################
@@ -204,29 +188,24 @@ print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
 ridge = Ridge().fit(X_train,y_train)
 print("Training set score: {:.2f}".format(ridge.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(ridge.score(X_test,y_test)))
-y_pred=ridge.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6217 est moins bon que pour knn 0.9212  et que logreg1000 0.6302  en plus 
-#on a des valeurs de training et de test score bizarres.
+#valeurs étranges 
+#Training set score: 0.08
+#Test set score: 0.05
 
 #Autres valeurs pour Ridge 
 ridge10 = Ridge(alpha=10).fit(X_train,y_train)
 print("Training set score: {:.2f}".format(ridge10.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(ridge10.score(X_test,y_test)))
-y_pred=ridge10.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6215 est moins bon que pour knn 0.9212  et que logreg1000 0.6302  
-
+#valeurs étranges 
+#Training set score: 0.08
+#Test set score: 0.06
 
 ridge01 = Ridge(alpha=0.1).fit(X_train,y_train)
 print("Training set score: {:.2f}".format(ridge01.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(ridge01.score(X_test,y_test)))
-y_pred=ridge01.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score 0.6208  est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#valeurs étranges 
+#Training set score: 0.08
+#Test set score: 0.05
 
 
 
@@ -237,38 +216,38 @@ lasso = Lasso().fit(X_train,y_train)
 print("Training set score: {:.2f}".format(lasso.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(lasso.score(X_test,y_test)))
 print("Number of features used: {}".format(np.sum(lasso.coef_ != 0)))
-y_pred=lasso.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score  0.5453 est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#Valeurs étranges
+#Training set score: 0.00
+#Test set score: -0.00
+#Number of features used: 0
 
 #Lasso autres valeurs
 lasso001 = Lasso(alpha=0.01,max_iter=100000).fit(X_train,y_train)
 print("Training set score: {:.2f}".format(lasso001.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(lasso001.score(X_test,y_test)))
 print("Number of features used: {}".format(np.sum(lasso001.coef_ != 0)))
-y_pred=lasso001.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score  0.5937 est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#Valeurs étranges
+#Training set score: 0.07
+#Test set score: 0.07
+#Number of features used: 18
 
 lasso10 = Lasso(alpha=10,max_iter=100000).fit(X_train,y_train)
 print("Training set score: {:.2f}".format(lasso10.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(lasso10.score(X_test,y_test)))
 print("Number of features used: {}".format(np.sum(lasso10.coef_ != 0)))
-y_pred=lasso10.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score  0.5453 est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#Valeurs étranges
+#Training set score: 0.00
+#Test set score: -0.00
+#Number of features used: 0
 
 lasso00001 = Lasso(alpha=0.0001,max_iter=100000).fit(X_train,y_train)
 print("Training set score: {:.2f}".format(lasso00001.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(lasso00001.score(X_test,y_test)))
 print("Number of features used: {}".format(np.sum(lasso00001.coef_ != 0)))
-y_pred=lasso00001.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score  0.6217 est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#Valeurs étranges
+#Training set score: 0.08
+#Test set score: 0.06
+#Number of features used: 57
 
 
 ##############################################
@@ -279,10 +258,10 @@ baseElasticNet = ElasticNet().fit(X_train,y_train)
 print("Training set score: {:.2f}".format(baseElasticNet.score(X_train,y_train)))
 print("Test set score: {:.2f}".format(baseElasticNet.score(X_test,y_test)))
 print("Number of features used: {}".format(np.sum(baseElasticNet.coef_ != 0)))
-y_pred= baseElasticNet.predict(X_Scaled)
-y_pred=y_pred>0.5
-print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-#le F1 score  0.5453 est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#Valeurs étranges
+#Training set score: 0.00
+#Test set score: -0.00
+#Number of features used: 0
 
 
 #ElasticNet avec plusieurs valeurs pour alpha et l1_ratio
@@ -292,7 +271,7 @@ l=[0.0001, 0.01, 0.1, 0.5, 1]
 
 
 
-myENF1Score = []
+myENTestScore = []
 for myAlpha, myL1 in itertools.product(a,l) :
     myElasticNet =   ElasticNet(alpha=myAlpha, l1_ratio=myL1 ).fit(X_train,y_train)
     print("Alpha: {:.6f}".format(myAlpha)) 
@@ -300,23 +279,20 @@ for myAlpha, myL1 in itertools.product(a,l) :
     print("Training set score: {:.2f}".format(myElasticNet.score(X_train,y_train)))
     print("Test set score: {:.2f}".format(myElasticNet.score(X_test,y_test)))
     print("Number of features used: {}".format(np.sum(myElasticNet.coef_ != 0)))
-    y_pred= myElasticNet.predict(X_Scaled)
-    y_pred=y_pred>0.5
-    print("F1-Score : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-    myENF1Score.append(f1_score(y, y_pred, average ='weighted'))
+    myENTestScore.append(myElasticNet.score(X_test,y_test))
 
-#le max des F1Score pour ElasticNet
-max(myENF1Score)
-#le meilleur F1 score  0.6217 est moins bon que pour knn 0.9212  et que logreg1000 0.6302 
+#le max des Test Score pour ElasticNet
+max( myENTestScore)
+#le meilleur test  score   0.07332222123115184  valeur aberrantes
 
 
 
 #######################################################################
-# Affichage de l'importance des variables on prend logreg1000 qui 
+# Affichage de l'importance des variables on prend logreg qui 
 # est le "meilleur"
 #######################################################################
-signed_feature_importance = logreg1000.coef_[0] #pour afficher le sens 
-feature_importance = abs(logreg1000.coef_[0])  #pous classer par importance
+signed_feature_importance = logreg.coef_[0] #pour afficher le sens 
+feature_importance = abs(logreg.coef_[0])  #pous classer par importance
 #feature_importance = 100.0 * (feature_importance / feature_importance.max())
 sorted_idx = np.argsort(feature_importance)
 pos = np.arange(sorted_idx.shape[0]) + .5
@@ -328,9 +304,9 @@ ax.barh(pos, signed_feature_importance[sorted_idx], align='center')
 ax.set_yticks(pos)
 ax.set_yticklabels(np.array(X.columns)[sorted_idx], fontsize=8)
 #fig.suptitle("aaa \n bbb ", fontsize=10)
-ax.set(xlabel='Importance Relative des variables\nRégression Logistique C=1000 - Univers de concurrence - Importance des variables',
-       title="La taille du H1 en caractères et en nombre de mots sont les 2 facteurs importants \n toutefois dans un sens différent !")
-fig.savefig("QPPS6-logreg1000-Importance-Variables-2goups.png", bbox_inches="tight", dpi=600)
+ax.set(xlabel='Importance Relative des variables\nRégression Logistique C=1 - Univers de concurrence - Importance des variables',
+       title="La taille du Body en caractères et en nombre de mots sont les 2 facteurs importants \n toutefois dans un sens différent !")
+fig.savefig("QPPS6-logreg-Importance-Variables-2goups.png", bbox_inches="tight", dpi=600)
 ##############################################################
 
 #########################################################################
@@ -339,12 +315,10 @@ fig.savefig("QPPS6-logreg1000-Importance-Variables-2goups.png", bbox_inches="tig
 #xgboost avec parametres standards par défaut
 
 myXGBoost =   XGBClassifier().fit(X_train,y_train)
-print("Training set score: {:.3f}".format(myXGBoost.score(X_train,y_train))) #0.909
-print("Test set score: {:.3f}".format(myXGBoost.score(X_test,y_test))) #0.771
-y_pred=myXGBoost.predict(X_Scaled)
-print("F1-Score weighted : {:.4f}".format(f1_score(y, y_pred, average ='weighted')))
-baseF1Score = f1_score(y, y_pred, average ='weighted') #on le sauvegarde pour l'afficher plus tard
-#le F1 score 0.7082 est moins bon que pour knn 0.9212  mais bien mieux que logreg1000 0.6302 
+print("Training set score: {:.3f}".format(myXGBoost.score(X_train,y_train))) 
+print("Test set score: {:.3f}".format(myXGBoost.score(X_test,y_test))) 
+
+
 
 #pour info : parametres par défaut    
 myXGBoost.get_xgb_params()
